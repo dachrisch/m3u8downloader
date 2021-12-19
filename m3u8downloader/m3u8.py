@@ -13,6 +13,7 @@ Features:
 from __future__ import print_function, unicode_literals
 
 import argparse
+import hashlib
 import sys
 import os
 import os.path
@@ -26,10 +27,11 @@ import logging
 import platform
 
 import requests
+from more_itertools import only, one
 from wells.utils import retry
 
 import m3u8downloader
-import m3u8downloader.configlogger    # pylint: disable=unused-import
+import m3u8downloader.configlogger  # pylint: disable=unused-import
 
 logger = logging.getLogger(__name__)
 SESSION = requests.Session()
@@ -52,7 +54,16 @@ def get_local_file_for_url(tempdir, url, path_line=None):
     path = get_url_path(url)
     if path.startswith("/"):
         path = path[1:]
-    return os.path.normpath(os.path.join(tempdir, path))
+
+    short_path = []
+    for part in path.split('/'):
+        if len(part) < 10:
+            to_append = part
+        else:
+            to_append = hashlib.sha1(part.encode()).hexdigest()
+        short_path.append(to_append)
+
+    return os.path.normpath(os.path.join(tempdir, '/'.join(short_path)))
 
 
 def get_default_cache_dir():
@@ -272,8 +283,9 @@ class M3u8Downloader:
                "-loglevel", "warning",
                "-allowed_extensions", "ALL",
                "-i", self.media_playlist_localfile,
-               "-acodec", "copy",
-               "-vcodec", "copy",
+               "-i", self.media_playlist_localfile_audio,
+               "-c:v", "copy",
+               "-c:a", "aac",
                "-bsf:a", "aac_adtstoasc",
                target_mp4]
         logger.info("Running: %s", cmd)
@@ -355,18 +367,18 @@ class M3u8Downloader:
         if fetched_fragment == self.total_fragments:
             logger.info("100%%, %s fragments fetched", self.total_fragments)
         elif fetched_fragment % 10 == 0:
-            logger.info("[%2.0f%%] %3s/%s fragments fetched",
-                        fetched_fragment * 100.0 / self.total_fragments,
-                        fetched_fragment,
-                        self.total_fragments)
+            logger.debug("[%2.0f%%] %3s/%s fragments fetched",
+                         fetched_fragment * 100.0 / self.total_fragments,
+                         fetched_fragment,
+                         self.total_fragments)
 
-    def fragment_download_failed(self, e):    # pylint: disable=no-self-use
+    def fragment_download_failed(self, e):  # pylint: disable=no-self-use
         """apply_async error callback.
 
         """
         try:
             raise e
-        except Exception:    # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except
             # I don't have the url in the run time exception. hope requests
             # exception have it.
             logger.exception("fragment download failed")
@@ -441,6 +453,10 @@ class M3u8Downloader:
                 target_media_playlist = line
         logger.info("chose resolution=%s uri=%s",
                     last_resolution, target_media_playlist)
+        audio_url = self._seperate_audio_file(content)
+        self.process_media_playlist(audio_url)
+        self.media_playlist_localfile_audio=self.media_playlist_localfile
+
         self.process_media_playlist(urljoin(url, target_media_playlist))
 
     def download_m3u8_link(self, url):
@@ -452,6 +468,14 @@ class M3u8Downloader:
             self.process_master_playlist(url, content)
         else:
             self.process_media_playlist(url, content)
+
+    def _seperate_audio_file(self, content):
+        parts = content.decode("utf-8").split('\n')
+        audio_part = only(filter(lambda line: line.startswith('#EXT-X-MEDIA:TYPE=AUDIO'), parts), '')
+        uri_pattern = re.compile(r'URI="([^"]+)"')
+        audio_uri = one(uri_pattern.findall(audio_part))
+        logger.info(f'using audio from {audio_uri}')
+        return audio_uri
 
 
 def main():
