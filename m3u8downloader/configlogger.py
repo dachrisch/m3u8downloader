@@ -32,6 +32,7 @@ def load_logger_config():
     logging.basicConfig(
         format='%(asctime)s %(levelname)-8s %(message)s',
         level=level)
+    logging.getLogger('m3u8').setLevel(logging.INFO)
     logging.debug("log dir %s doesn't exist. Using basic config with level=%s",
                   logdir, level)
 

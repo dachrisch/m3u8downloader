@@ -14,17 +14,16 @@ from __future__ import print_function, unicode_literals
 
 import argparse
 import hashlib
-import sys
-import os
-import os.path
-import subprocess
-import re
-from urllib.parse import urljoin, urlparse
-from collections import OrderedDict
+import logging
 import multiprocessing
 import multiprocessing.queues
-import logging
-import platform
+import os
+import os.path
+import re
+import subprocess
+import sys
+from collections import OrderedDict
+from urllib.parse import urljoin, urlparse
 
 import requests
 from more_itertools import only, one
@@ -453,9 +452,9 @@ class M3u8Downloader:
                 target_media_playlist = line
         logger.info("chose resolution=%s uri=%s",
                     last_resolution, target_media_playlist)
-        audio_url = self._seperate_audio_file(content)
+        audio_url = self._separate_audio_file(content)
         self.process_media_playlist(audio_url)
-        self.media_playlist_localfile_audio=self.media_playlist_localfile
+        self.media_playlist_localfile_audio = self.media_playlist_localfile
 
         self.process_media_playlist(urljoin(url, target_media_playlist))
 
@@ -469,7 +468,7 @@ class M3u8Downloader:
         else:
             self.process_media_playlist(url, content)
 
-    def _seperate_audio_file(self, content):
+    def _separate_audio_file(self, content):
         parts = content.decode("utf-8").split('\n')
         audio_part = only(filter(lambda line: line.startswith('#EXT-X-MEDIA:TYPE=AUDIO'), parts), '')
         uri_pattern = re.compile(r'URI="([^"]+)"')
