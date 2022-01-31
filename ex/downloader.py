@@ -37,6 +37,7 @@ class DropboxM3u8Retriever:
         for video_url in self.collect_video_urls():
             self.load_video_player(video_url)
 
+        self.browser.quit()
         return self.videos
 
     def collect_video_urls(self):
@@ -65,22 +66,22 @@ class DropboxM3u8Retriever:
 def main():
     parser = ArgumentParser(prog='m3u8downloader',
                             description="download video and audio at m3u8 url")
-    parser.add_argument('url_file', metavar='URL_FILE', help='file containing m3u8 urls')
+    parser.add_argument('url_file', help='file containing m3u8 urls')
+    parser.add_argument('directory', help='directory to download files')
     args = parser.parse_args()
     log = getLogger(__name__).info
-    working_dir = 'down'
-    makedirs(working_dir, exist_ok=True)
+    makedirs(args.directory, exist_ok=True)
     with open(args.url_file, 'r') as urls_file:
         video_json = json.load(urls_file)
 
     video_files = DropboxM3u8Retriever().get_video_files(video_json['url'], video_json['password'])
 
     for video_file in video_files:
-        filename = f'{working_dir}/{video_file.filename}'
+        filename = f'{args.directory}/{video_file.filename}'
         if os.path.isfile(filename):
             log(f'skipping already present {video_file}')
         else:
-            downloader = M3u8Downloader(video_file.url, filename, tempdir=working_dir)
+            downloader = M3u8Downloader(video_file.url, filename, tempdir=args.directory)
             log(f'downloading {video_file}...')
             downloader.start()
 
