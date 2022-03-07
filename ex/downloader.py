@@ -2,8 +2,9 @@ import json
 import os.path
 import random
 import string
+import subprocess
 from argparse import ArgumentParser
-from logging import getLogger
+from logging import getLogger, INFO, basicConfig
 from os import makedirs
 from typing import List
 
@@ -11,8 +12,6 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
-
-from m3u8downloader import M3u8Downloader
 
 
 class VideoFile:
@@ -29,11 +28,13 @@ class DropboxVideoPage:
         self.video_url = video_url
         self.browser = browser
         self.log = getLogger(self.__class__.__name__).info
+        self.debug= getLogger(self.__class__.__name__).debug
 
     def __enter__(self):
         self.browser.get(self.video_url)
         source = self.browser.find_element(By.XPATH, '//source')
-        self.log(f'obtained video [{self.browser.title}] at [{source.get_attribute("src")}]')
+        self.log(f'obtained video [{self.browser.title}]')
+        self.debug(f'video url: {source.get_attribute("src")}')
         return VideoFile(self.browser.title, source.get_attribute('src'))
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -105,6 +106,7 @@ def main():
     parser.add_argument('directory', help='directory to download files')
     args = parser.parse_args()
     log = getLogger(__name__).info
+    debug = getLogger(__name__).debug
     makedirs(args.directory, exist_ok=True)
     with open(args.url_file, 'r') as urls_file:
         video_json = json.load(urls_file)
@@ -122,9 +124,15 @@ def main():
         if os.path.isfile(filename):
             log(f'skipping already present [{video_file.filename}]')
         else:
-            downloader = M3u8Downloader(video_file.url, filename, tempdir=args.directory)
             log(f'downloading {video_file}...')
-            downloader.start()
+            command = (
+            'ffmpeg', '-i', video_file.url, '-acodec', 'copy', '-vcodec', 'copy', '-loglevel', 'fatal', filename)
+            debug(f'running command: {" ".join(command)}')
+            run = subprocess.run(command)
+            if run.returncode == 0:
+                log(f'successfully downloaded [{video_file.filename}]')
+            else:
+                log(f'error downloading [{video_file.filename}]: {run.stderr}')
 
 
 def button_enabled(driver: WebDriver):
@@ -140,4 +148,5 @@ def item_present(driver: WebDriver):
 
 
 if __name__ == '__main__':
+    basicConfig(level=INFO)
     main()
